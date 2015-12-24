@@ -2,25 +2,29 @@ package easytts.main;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 
 import com.deb.lib.program.Logger;
 import com.deb.lib.program.ProgramFs;
 
 public class Speaker {
 	
-	static final int delay = 50;
+	static final int loopDelay = 50;
 	File batch;
+	ArrayList<ReplacementIndex> rIs = new ArrayList<>();
 	
 	public Speaker() {
-		batch = ProgramFs.getProgramFile("Speaker.bat");
+		this(ProgramFs.getProgramFile("Speaker.bat"), null, true, null);//NOTE: Use full constructor
 	}
 	
-	public Speaker(File f) {
+	public Speaker(File f, ReplacementIndex preBase, boolean useBase, ReplacementIndex postBase) {
 		batch = f;
+		if(preBase != null) this.rIs.add(preBase);
+		if(useBase) this.rIs.add(this.getBase());
+		if(postBase != null) this.rIs.add(postBase);
 	}
 	
 	public boolean speak(String message, boolean pause, boolean log) {
-		//NOTE: Add code for determining validity of file
 		if(checkFillBat()) {
 			Thread t = new Thread(new Runnable(){
 				@Override
@@ -30,7 +34,7 @@ public class Speaker {
 					command += "\" ";
 					command += batch.getName();
 					command += " \"";
-					command += removeDangerous(message);
+					command += replaceAll(message);
 					command += "\"";
 					Process p;
 					try {
@@ -39,7 +43,7 @@ public class Speaker {
 						if(pause) {
 							while(p.isAlive()) {
 								try {
-									Thread.sleep(delay);
+									Thread.sleep(loopDelay);
 								} catch (InterruptedException e) {  }
 							}
 						}
@@ -54,7 +58,7 @@ public class Speaker {
 			if(pause) {
 				while(t.isAlive()) {
 					try {
-						Thread.sleep(delay);
+						Thread.sleep(loopDelay);
 					} catch (InterruptedException e) {  }
 				}
 			}
@@ -65,10 +69,12 @@ public class Speaker {
 		return false;
 	}
 	
-	String removeDangerous(String in) {
+	String replaceAll(String in) {
 		String out = in;
 		
-		//NOTE: Add anything
+		for(int i = 0; i < this.rIs.size(); i++) {
+			out = this.rIs.get(i).replace(out);
+		}
 		
 		return out;
 	}
@@ -78,6 +84,21 @@ public class Speaker {
 			return ProgramFs.saveString(batch, batchString);
 		}
 		return true;
+	}
+	
+	ReplacementIndex getBase() {
+		return new ReplacementIndex()
+				.add("\t", " ")
+				.add("\b", " ")
+				.add("\n", " ")
+				.add("\r", " ")
+				.add("\f", " ")
+				.add("\'", " ")
+				.add("\"", " ")
+				.add("\\", " back slash ")
+				.add("-", " ")
+				.add("/", " forward slash ")
+				;
 	}
 	
 	String batchString = "title Talk\ncolor A\n:st\ncls\nif exist Talk_.vbs del Talk_.vbs\ncopy NUL Talk_.vbs\ncls\nping localhost -n 2 > nul\necho strText = (\"%~1\")> \"Talk_.vbs\"\necho Set objvoice = CreateObject(\"SAPI.SpVoice\")>> \"Talk_.vbs\"\necho ObjVoice.Speak strText>> \"Talk_.vbs\"\ncls\nstart /B /w Talk_.vbs\nping localhost -n 3 > nul\ndel Talk_.vbs\nexit";
